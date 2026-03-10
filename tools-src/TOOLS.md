@@ -23,3 +23,8 @@ For all messengers: receive notifications of new messages, read contacts, groups
 # Transportation
 
 - [ ] Uber - call a car to specific destination from current place, check the status of the car/ride including stream the current position, support ordering food as well
+
+# Search
+
+- [x] Tavily - web search with answer synthesis and domain filters
+- [x] arXiv - search scientific papers and metadata from arXiv

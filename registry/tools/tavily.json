@@ -1,0 +1,37 @@
+{
+  "name": "tavily",
+  "display_name": "Tavily Search",
+  "kind": "tool",
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Search the web using Tavily Search API",
+  "keywords": [
+    "search",
+    "web",
+    "internet",
+    "tavily"
+  ],
+  "source": {
+    "dir": "tools-src/tavily",
+    "capabilities": "tavily-tool.capabilities.json",
+    "crate_name": "tavily-tool"
+  },
+  "artifacts": {
+    "wasm32-wasip2": {
+      "url": null,
+      "sha256": null
+    }
+  },
+  "auth_summary": {
+    "method": "manual",
+    "provider": "Tavily",
+    "secrets": [
+      "tavily_api_key"
+    ],
+    "shared_auth": null,
+    "setup_url": "https://app.tavily.com/"
+  },
+  "tags": [
+    "search"
+  ]
+}

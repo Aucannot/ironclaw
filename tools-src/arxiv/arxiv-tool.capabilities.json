@@ -1,0 +1,21 @@
+{
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "export.arxiv.org",
+          "path_prefix": "/api/query",
+          "methods": [
+            "GET"
+          ]
+        }
+      ],
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "requests_per_hour": 1000
+      }
+    }
+  }
+}

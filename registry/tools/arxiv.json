@@ -1,0 +1,36 @@
+{
+  "name": "arxiv",
+  "display_name": "arXiv Search",
+  "kind": "tool",
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Search arXiv papers and return structured metadata",
+  "keywords": [
+    "arxiv",
+    "papers",
+    "research",
+    "search"
+  ],
+  "source": {
+    "dir": "tools-src/arxiv",
+    "capabilities": "arxiv-tool.capabilities.json",
+    "crate_name": "arxiv-tool"
+  },
+  "artifacts": {
+    "wasm32-wasip2": {
+      "url": null,
+      "sha256": null
+    }
+  },
+  "auth_summary": {
+    "method": "none",
+    "provider": "arXiv",
+    "secrets": [],
+    "shared_auth": null,
+    "setup_url": null
+  },
+  "tags": [
+    "search",
+    "research"
+  ]
+}
