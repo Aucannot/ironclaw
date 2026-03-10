@@ -117,7 +117,7 @@ pub trait LlmProvider: Send + Sync {
 ```
 
 Key notes:
-- `model_name()` returns the configured model name; `active_model_name()` returns the currently active model (may differ if `set_model()` was called — only `NearAiChatProvider` supports this).
+- `model_name()` returns the configured model name; `active_model_name()` returns the currently active model (may differ if `set_model()` was called — `NearAiChatProvider`, `BedrockProvider`, `AnthropicOAuthProvider`, and `SwitchableProvider` support runtime model switching).
 - `cost_per_token()` returns `(Decimal, Decimal)` using `rust_decimal`. Look up via `costs::model_cost()` in your constructor; fall back to `costs::default_cost()` for unknowns.
 - `RigAdapter` ignores per-request model overrides (logs a warning). Only `NearAiChatProvider` supports per-request model overrides via `CompletionRequest::model`.
 - `complete_with_tools()` is never cached (tool calls can have side effects) — `CachedProvider` always passes them through.

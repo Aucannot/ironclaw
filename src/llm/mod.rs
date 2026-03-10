@@ -27,6 +27,7 @@ pub mod retry;
 mod rig_adapter;
 pub mod session;
 pub mod smart_routing;
+mod switchable;
 
 pub mod image_models;
 pub mod vision_models;
@@ -55,6 +56,7 @@ pub use retry::{RetryConfig, RetryProvider};
 pub use rig_adapter::RigAdapter;
 pub use session::{SessionConfig, SessionManager, create_session_manager};
 pub use smart_routing::{SmartRoutingConfig, SmartRoutingProvider, TaskComplexity};
+pub use switchable::SwitchableProvider;
 
 use std::sync::Arc;
 
@@ -100,7 +102,7 @@ pub async fn create_llm_provider(
             provider: config.backend.clone(),
         })?;
 
-    create_registry_provider(reg_config)
+    create_switchable_registry_provider(reg_config)
 }
 
 /// Create an LLM provider from a `NearAiConfig` directly.
@@ -136,7 +138,16 @@ pub fn create_llm_provider_with_config(
 /// Dispatches on `RegistryProviderConfig::protocol` to build the appropriate
 /// rig-core client. This single function replaces what used to be 5 separate
 /// `create_*_provider` functions.
-fn create_registry_provider(
+fn create_switchable_registry_provider(
+    config: &RegistryProviderConfig,
+) -> Result<Arc<dyn LlmProvider>, LlmError> {
+    Ok(Arc::new(SwitchableProvider::new(
+        config.clone(),
+        create_registry_provider_inner,
+    )?))
+}
+
+fn create_registry_provider_inner(
     config: &RegistryProviderConfig,
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
     match config.protocol {
