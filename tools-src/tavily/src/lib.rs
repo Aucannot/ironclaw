@@ -75,14 +75,19 @@ fn execute_inner(params: &str) -> Result<String, String> {
     let params: SearchParams =
         serde_json::from_str(params).map_err(|e| format!("Invalid parameters: {e}"))?;
 
-    if params.query.trim().is_empty() {
+    let query = params.query.trim();
+
+    if query.is_empty() {
         return Err("'query' must not be empty".into());
     }
-    if params.query.len() > 2000 {
+    if query.len() > 2000 {
         return Err("'query' exceeds maximum length of 2000 characters".into());
     }
 
-    let max_results = params.max_results.unwrap_or(DEFAULT_MAX_RESULTS).clamp(1, MAX_RESULTS);
+    let max_results = params
+        .max_results
+        .unwrap_or(DEFAULT_MAX_RESULTS)
+        .clamp(1, MAX_RESULTS);
     let search_depth = params.search_depth.as_deref().unwrap_or("basic");
     if !matches!(search_depth, "basic" | "advanced") {
         return Err("Invalid 'search_depth': expected 'basic' or 'advanced'".into());
@@ -93,13 +98,24 @@ fn execute_inner(params: &str) -> Result<String, String> {
         return Err("Invalid 'topic': expected 'general' or 'news'".into());
     }
 
+    if let Some(days) = params.days {
+        if days == 0 {
+            return Err("Invalid 'days': expected integer >= 1".into());
+        }
+
+        if topic != "news" {
+            return Err("Invalid 'days': only supported when topic='news'".into());
+        }
+    }
+
+    validate_domain_filters(params.include_domains.as_deref(), "include_domains")?;
+    validate_domain_filters(params.exclude_domains.as_deref(), "exclude_domains")?;
+
     if !near::agent::host::secret_exists("tavily_api_key") {
-        return Err(
-            "Tavily API key not found in secret store. Set it with: \
+        return Err("Tavily API key not found in secret store. Set it with: \
              ironclaw secret set tavily_api_key <key>. \
              Get a key at: https://app.tavily.com/"
-                .into(),
-        );
+            .into());
     }
 
     let payload = build_payload(&params, max_results, search_depth, topic);
@@ -175,7 +191,7 @@ fn execute_inner(params: &str) -> Result<String, String> {
         .collect();
 
     let output = serde_json::json!({
-        "query": params.query,
+        "query": query,
         "answer": tavily.answer,
         "images": tavily.images.unwrap_or_default(),
         "result_count": formatted.len(),
@@ -183,6 +199,22 @@ fn execute_inner(params: &str) -> Result<String, String> {
     });
 
     serde_json::to_string(&output).map_err(|e| format!("Failed to serialize output: {e}"))
+}
+
+fn validate_domain_filters(domains: Option<&[String]>, field_name: &str) -> Result<(), String> {
+    let Some(domains) = domains else {
+        return Ok(());
+    };
+
+    for domain in domains {
+        if domain.trim().is_empty() {
+            return Err(format!(
+                "Invalid '{field_name}': domain entries must not be empty"
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn build_payload(
