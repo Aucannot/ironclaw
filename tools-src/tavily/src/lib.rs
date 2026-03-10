@@ -108,8 +108,10 @@ fn execute_inner(params: &str) -> Result<String, String> {
         }
     }
 
-    validate_domain_filters(params.include_domains.as_deref(), "include_domains")?;
-    validate_domain_filters(params.exclude_domains.as_deref(), "exclude_domains")?;
+    let include_domains =
+        normalize_domain_filters(params.include_domains.as_deref(), "include_domains")?;
+    let exclude_domains =
+        normalize_domain_filters(params.exclude_domains.as_deref(), "exclude_domains")?;
 
     if !near::agent::host::secret_exists("tavily_api_key") {
         return Err("Tavily API key not found in secret store. Set it with: \
@@ -118,7 +120,15 @@ fn execute_inner(params: &str) -> Result<String, String> {
             .into());
     }
 
-    let payload = build_payload(&params, max_results, search_depth, topic);
+    let payload = build_payload(
+        query,
+        &params,
+        max_results,
+        search_depth,
+        topic,
+        include_domains.as_deref(),
+        exclude_domains.as_deref(),
+    );
     let headers = serde_json::json!({
         "Accept": "application/json",
         "Content-Type": "application/json",
@@ -201,30 +211,39 @@ fn execute_inner(params: &str) -> Result<String, String> {
     serde_json::to_string(&output).map_err(|e| format!("Failed to serialize output: {e}"))
 }
 
-fn validate_domain_filters(domains: Option<&[String]>, field_name: &str) -> Result<(), String> {
+fn normalize_domain_filters(
+    domains: Option<&[String]>,
+    field_name: &str,
+) -> Result<Option<Vec<String>>, String> {
     let Some(domains) = domains else {
-        return Ok(());
+        return Ok(None);
     };
 
+    let mut normalized = Vec::with_capacity(domains.len());
     for domain in domains {
-        if domain.trim().is_empty() {
+        let trimmed = domain.trim();
+        if trimmed.is_empty() {
             return Err(format!(
                 "Invalid '{field_name}': domain entries must not be empty"
             ));
         }
+        normalized.push(trimmed.to_string());
     }
 
-    Ok(())
+    Ok(Some(normalized))
 }
 
 fn build_payload(
+    query: &str,
     params: &SearchParams,
     max_results: u32,
     search_depth: &str,
     topic: &str,
+    include_domains: Option<&[String]>,
+    exclude_domains: Option<&[String]>,
 ) -> serde_json::Value {
     let mut payload = serde_json::json!({
-        "query": params.query,
+        "query": query,
         "max_results": max_results,
         "search_depth": search_depth,
         "topic": topic,
@@ -232,12 +251,12 @@ fn build_payload(
         "include_raw_content": params.include_raw_content.unwrap_or(false),
     });
 
-    if let Some(ref include_domains) = params.include_domains {
+    if let Some(include_domains) = include_domains {
         if !include_domains.is_empty() {
             payload["include_domains"] = serde_json::json!(include_domains);
         }
     }
-    if let Some(ref exclude_domains) = params.exclude_domains {
+    if let Some(exclude_domains) = exclude_domains {
         if !exclude_domains.is_empty() {
             payload["exclude_domains"] = serde_json::json!(exclude_domains);
         }
@@ -325,7 +344,7 @@ mod tests {
             days: None,
         };
 
-        let payload = build_payload(&p, 5, "basic", "general");
+        let payload = build_payload("rust wasm", &p, 5, "basic", "general", None, None);
         assert_eq!(payload["query"], "rust wasm");
         assert_eq!(payload["max_results"], 5);
         assert_eq!(payload["search_depth"], "basic");
@@ -349,9 +368,33 @@ mod tests {
             days: Some(7),
         };
 
-        let payload = build_payload(&p, 3, "advanced", "news");
+        let include_domains = vec!["example.com".to_string()];
+        let exclude_domains = vec!["spam.com".to_string()];
+        let payload = build_payload(
+            "ai news",
+            &p,
+            3,
+            "advanced",
+            "news",
+            Some(&include_domains),
+            Some(&exclude_domains),
+        );
         assert_eq!(payload["include_domains"][0], "example.com");
         assert_eq!(payload["exclude_domains"][0], "spam.com");
         assert_eq!(payload["days"], 7);
+    }
+
+    #[test]
+    fn normalize_domain_filters_trims_values() {
+        let domains = vec![" example.com ".to_string(), "sub.example.com".to_string()];
+        let normalized = normalize_domain_filters(Some(&domains), "include_domains").unwrap();
+
+        assert_eq!(
+            normalized,
+            Some(vec![
+                "example.com".to_string(),
+                "sub.example.com".to_string()
+            ])
+        );
     }
 }
