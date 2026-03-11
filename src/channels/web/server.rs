@@ -1396,7 +1396,7 @@ async fn chat_threads_handler(
 async fn chat_delete_thread_handler(
     State(state): State<Arc<GatewayState>>,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, (StatusCode, String)> {
+) -> Result<Json<DeleteThreadResponse>, (StatusCode, String)> {
     let session_manager = state.session_manager.as_ref().ok_or((
         StatusCode::SERVICE_UNAVAILABLE,
         "Session manager not available".to_string(),
@@ -1433,7 +1433,7 @@ async fn chat_delete_thread_handler(
     }
 
     if deleted || removed_from_memory {
-        Ok(StatusCode::NO_CONTENT)
+        Ok(Json(DeleteThreadResponse { deleted: true }))
     } else {
         Err((StatusCode::NOT_FOUND, "Thread not found".to_string()))
     }

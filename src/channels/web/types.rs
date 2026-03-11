@@ -55,6 +55,11 @@ pub struct ThreadListResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct DeleteThreadResponse {
+    pub deleted: bool,
+}
+
+#[derive(Debug, Serialize)]
 pub struct TurnInfo {
     pub turn_number: usize,
     pub user_input: String,
