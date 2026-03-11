@@ -169,17 +169,17 @@ pub(crate) fn parse_timestamp(s: &str) -> Result<DateTime<Utc>, String> {
     }
     // Naive with fractional seconds (legacy or SQLite datetime() output)
     if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
-        tracing::warn!(
+        tracing::debug!(
             timestamp = %s,
-            "parsed naive timestamp without timezone; assuming UTC for backward compatibility"
+            "parsed legacy naive timestamp without timezone; assumed UTC"
         );
         return Ok(ndt.and_utc());
     }
     // Naive without fractional seconds (legacy format)
     if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-        tracing::warn!(
+        tracing::debug!(
             timestamp = %s,
-            "parsed naive timestamp without timezone; assuming UTC for backward compatibility"
+            "parsed legacy naive timestamp without timezone; assumed UTC"
         );
         return Ok(ndt.and_utc());
     }
