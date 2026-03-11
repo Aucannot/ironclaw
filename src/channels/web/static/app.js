@@ -780,13 +780,42 @@ function copyCodeBlock(btn) {
   if (!pre) return;
   const code = pre.querySelector('code');
   const text = code ? code.textContent : pre.textContent;
-  navigator.clipboard.writeText(text).then(() => {
+
+  const handleCopySuccess = () => {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-  }).catch(() => {
+  };
+
+  const handleCopyFailure = () => {
     btn.textContent = 'Copy failed';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-  });
+  };
+
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(text).then(handleCopySuccess).catch(handleCopyFailure);
+    return;
+  }
+
+  // Fallback for browsers/contexts without navigator.clipboard.
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  try {
+    if (document.execCommand('copy')) {
+      handleCopySuccess();
+    } else {
+      handleCopyFailure();
+    }
+  } catch (_) {
+    handleCopyFailure();
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }
 
 function addMessage(role, content) {
