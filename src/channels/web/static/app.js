@@ -682,6 +682,7 @@ function renderMarkdown(text) {
     let html = marked.parse(text);
     // Sanitize HTML output to prevent XSS from tool output or LLM responses.
     html = sanitizeRenderedHtml(html);
+    html = hardenRenderedHtml(html);
     return html;
   }
   return escapeHtml(text);
@@ -755,6 +756,36 @@ function enhanceRenderedContent(el) {
   }
 
   enhanceCodeBlocks(el);
+}
+
+
+function hardenRenderedHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  // Remove dangerous URL schemes from link-like attributes.
+  template.content.querySelectorAll('[href], [src], [action]').forEach((node) => {
+    ['href', 'src', 'action'].forEach((attr) => {
+      if (!node.hasAttribute(attr)) return;
+      const value = (node.getAttribute(attr) || '').trim();
+      if (!value) return;
+      const normalized = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+      if (normalized.startsWith('javascript:') || normalized.startsWith('data:') || normalized.startsWith('vbscript:')) {
+        node.removeAttribute(attr);
+      }
+    });
+  });
+
+  // Prevent reverse tabnabbing for markdown links opening in a new tab.
+  template.content.querySelectorAll('a[target="_blank"]').forEach((anchor) => {
+    const existingRel = (anchor.getAttribute('rel') || '').split(/\s+/).filter(Boolean);
+    const rel = new Set(existingRel);
+    rel.add('noopener');
+    rel.add('noreferrer');
+    anchor.setAttribute('rel', Array.from(rel).join(' '));
+  });
+
+  return template.innerHTML;
 }
 
 // Strip dangerous HTML elements and attributes from rendered markdown.
