@@ -703,10 +703,13 @@ function enhanceCodeBlocks(el) {
     if (code && typeof hljs !== 'undefined') {
       if (language && hljs.getLanguage(language)) {
         hljs.highlightElement(code);
-      } else if (!language) {
+      } else {
         hljs.highlightElement(code);
       }
     }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block-wrapper';
 
     const header = document.createElement('div');
     header.className = 'code-block-header';
@@ -724,8 +727,9 @@ function enhanceCodeBlocks(el) {
     copyBtn.onclick = function() { copyCodeBlock(copyBtn); };
     header.appendChild(copyBtn);
 
-    pre.classList.add('code-block-wrapper');
-    pre.insertBefore(header, pre.firstChild);
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(pre);
     pre.dataset.enhanced = '1';
   });
 }
@@ -776,7 +780,8 @@ function sanitizeRenderedHtml(html) {
 }
 
 function copyCodeBlock(btn) {
-  const pre = btn.closest('pre');
+  const wrapper = btn.closest('.code-block-wrapper');
+  const pre = wrapper ? wrapper.querySelector('pre') : btn.closest('pre');
   if (!pre) return;
   const code = pre.querySelector('code');
   const text = code ? code.textContent : pre.textContent;

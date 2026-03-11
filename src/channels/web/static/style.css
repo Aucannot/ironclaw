@@ -2991,6 +2991,17 @@ body {
 
 .code-block-wrapper {
   position: relative;
+  margin: 6px 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.code-block-wrapper pre {
+  margin: 0;
+  border-radius: 0;
+  border: none;
 }
 
 .code-block-header {
@@ -2998,7 +3009,6 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: -8px -12px 8px -12px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
