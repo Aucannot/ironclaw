@@ -47,6 +47,16 @@ let _slashMatches = [];
 
 // --- Tool Activity State ---
 let _activeGroup = null;
+
+let markdownRendererConfigured = false;
+
+function ensureMarkdownRendererConfigured() {
+  if (markdownRendererConfigured || typeof marked === 'undefined' || typeof marked.setOptions !== 'function') {
+    return;
+  }
+  marked.setOptions({ gfm: true, breaks: true });
+  markdownRendererConfigured = true;
+}
 let _activeToolCards = {};
 let _activityThinking = null;
 
@@ -667,9 +677,7 @@ function renderMarkdown(text) {
       return escapeHtml(text);
     }
 
-    if (typeof marked.setOptions === 'function') {
-      marked.setOptions({ gfm: true, breaks: true });
-    }
+    ensureMarkdownRendererConfigured();
 
     let html = marked.parse(text);
     // Sanitize HTML output to prevent XSS from tool output or LLM responses.
@@ -681,7 +689,7 @@ function renderMarkdown(text) {
 
 function languageFromClassName(className) {
   if (!className) return '';
-  const m = className.match(/(?:^|\s)language-([a-z0-9_+-]+)/i);
+  const m = className.match(/(?:^|\s)(?:language|lang)-([a-z0-9_+-]+)/i);
   return m ? m[1].toLowerCase() : '';
 }
 
@@ -711,6 +719,7 @@ function enhanceCodeBlocks(el) {
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className = 'copy-btn';
+    copyBtn.setAttribute('aria-label', 'Copy code block');
     copyBtn.textContent = 'Copy';
     copyBtn.onclick = function() { copyCodeBlock(copyBtn); };
     header.appendChild(copyBtn);
@@ -735,6 +744,9 @@ function enhanceRenderedContent(el) {
         { left: '\\[', right: '\\]', display: true },
       ],
       ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+      ignoredClasses: ['katex'],
+      strict: 'ignore',
+      trust: false,
     });
   }
 
@@ -764,11 +776,15 @@ function sanitizeRenderedHtml(html) {
 }
 
 function copyCodeBlock(btn) {
-  const pre = btn.parentElement;
+  const pre = btn.closest('pre');
+  if (!pre) return;
   const code = pre.querySelector('code');
   const text = code ? code.textContent : pre.textContent;
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  }).catch(() => {
+    btn.textContent = 'Copy failed';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
   });
 }

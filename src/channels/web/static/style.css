@@ -2997,6 +2997,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin: -8px -12px 8px -12px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
@@ -3008,6 +3009,9 @@ body {
   font-size: 11px;
   color: var(--text-secondary);
   text-transform: lowercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .copy-btn {
