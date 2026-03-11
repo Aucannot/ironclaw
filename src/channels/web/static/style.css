@@ -3387,6 +3387,20 @@ mark {
   margin: 6px 0;
 }
 .memory-rendered pre code { background: none; padding: 0; }
+
+.message .katex-display,
+.memory-rendered .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+.message pre code.hljs,
+.memory-rendered pre code.hljs {
+  border-radius: calc(var(--radius) - 2px);
+  padding: 0;
+  background: transparent;
+}
 .memory-rendered a { color: var(--accent); }
 .memory-rendered blockquote {
   margin: 6px 0;

@@ -666,6 +666,21 @@ function renderMarkdown(text) {
     if (/^\s*<!doctype\s/i.test(text) || /^\s*<html[\s>]/i.test(text)) {
       return escapeHtml(text);
     }
+
+    if (typeof marked.setOptions === 'function') {
+      marked.setOptions({
+        gfm: true,
+        breaks: true,
+        highlight: function(code, lang) {
+          if (typeof hljs === 'undefined') return code;
+          if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+          }
+          return hljs.highlightAuto(code).value;
+        },
+      });
+    }
+
     let html = marked.parse(text);
     // Sanitize HTML output to prevent XSS from tool output or LLM responses.
     html = sanitizeRenderedHtml(html);
@@ -674,6 +689,31 @@ function renderMarkdown(text) {
     return html;
   }
   return escapeHtml(text);
+}
+
+function enhanceRenderedContent(el) {
+  if (!el) return;
+
+  // Render math formulas for research-style content.
+  if (typeof renderMathInElement === 'function') {
+    renderMathInElement(el, {
+      throwOnError: false,
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true },
+      ],
+      ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    });
+  }
+
+  // Apply syntax highlighting to code blocks when markdown renderer doesn't.
+  if (typeof hljs !== 'undefined') {
+    el.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block);
+    });
+  }
 }
 
 // Strip dangerous HTML elements and attributes from rendered markdown.
@@ -717,6 +757,7 @@ function addMessage(role, content) {
   } else {
     div.setAttribute('data-raw', content);
     div.innerHTML = renderMarkdown(content);
+    enhanceRenderedContent(div);
   }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
@@ -730,6 +771,7 @@ function appendToLastAssistant(chunk) {
     const raw = (last.getAttribute('data-raw') || '') + chunk;
     last.setAttribute('data-raw', raw);
     last.innerHTML = renderMarkdown(raw);
+    enhanceRenderedContent(last);
     container.scrollTop = container.scrollHeight;
   } else {
     addMessage('assistant', chunk);
@@ -1319,6 +1361,7 @@ function createMessageElement(role, content) {
   } else {
     div.setAttribute('data-raw', content);
     div.innerHTML = renderMarkdown(content);
+    enhanceRenderedContent(div);
   }
   return div;
 }
@@ -1773,6 +1816,7 @@ function readMemoryFile(path) {
     // Render markdown if it's a .md file
     if (path.endsWith('.md')) {
       viewer.innerHTML = '<div class="memory-rendered">' + renderMarkdown(data.content) + '</div>';
+      enhanceRenderedContent(viewer);
       viewer.classList.add('rendered');
     } else {
       viewer.textContent = data.content;
@@ -2940,6 +2984,7 @@ function renderJobOverview(container, job) {
     const descBody = document.createElement('div');
     descBody.className = 'job-description-body';
     descBody.innerHTML = renderMarkdown(job.description);
+    enhanceRenderedContent(descBody);
     descSection.appendChild(descBody);
     container.appendChild(descSection);
   }
