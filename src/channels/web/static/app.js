@@ -668,27 +668,57 @@ function renderMarkdown(text) {
     }
 
     if (typeof marked.setOptions === 'function') {
-      marked.setOptions({
-        gfm: true,
-        breaks: true,
-        highlight: function(code, lang) {
-          if (typeof hljs === 'undefined') return code;
-          if (lang && hljs.getLanguage(lang)) {
-            return hljs.highlight(code, { language: lang }).value;
-          }
-          return hljs.highlightAuto(code).value;
-        },
-      });
+      marked.setOptions({ gfm: true, breaks: true });
     }
 
     let html = marked.parse(text);
     // Sanitize HTML output to prevent XSS from tool output or LLM responses.
     html = sanitizeRenderedHtml(html);
-    // Inject copy buttons into <pre> blocks
-    html = html.replace(/<pre>/g, '<pre class="code-block-wrapper"><button class="copy-btn" onclick="copyCodeBlock(this)">Copy</button>');
     return html;
   }
   return escapeHtml(text);
+}
+
+function languageFromClassName(className) {
+  if (!className) return '';
+  const m = className.match(/(?:^|\s)language-([a-z0-9_+-]+)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+function enhanceCodeBlocks(el) {
+  el.querySelectorAll('pre').forEach((pre) => {
+    if (pre.dataset.enhanced === '1') return;
+
+    const code = pre.querySelector('code');
+    const language = code ? languageFromClassName(code.className) : '';
+
+    if (code && typeof hljs !== 'undefined') {
+      if (language && hljs.getLanguage(language)) {
+        hljs.highlightElement(code);
+      } else if (!language) {
+        hljs.highlightElement(code);
+      }
+    }
+
+    const header = document.createElement('div');
+    header.className = 'code-block-header';
+
+    const langChip = document.createElement('span');
+    langChip.className = 'code-lang';
+    langChip.textContent = language || 'text';
+    header.appendChild(langChip);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = function() { copyCodeBlock(copyBtn); };
+    header.appendChild(copyBtn);
+
+    pre.classList.add('code-block-wrapper');
+    pre.insertBefore(header, pre.firstChild);
+    pre.dataset.enhanced = '1';
+  });
 }
 
 function enhanceRenderedContent(el) {
@@ -708,12 +738,7 @@ function enhanceRenderedContent(el) {
     });
   }
 
-  // Apply syntax highlighting to code blocks when markdown renderer doesn't.
-  if (typeof hljs !== 'undefined') {
-    el.querySelectorAll('pre code').forEach((block) => {
-      hljs.highlightElement(block);
-    });
-  }
+  enhanceCodeBlocks(el);
 }
 
 // Strip dangerous HTML elements and attributes from rendered markdown.
