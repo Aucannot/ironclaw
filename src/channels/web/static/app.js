@@ -47,6 +47,16 @@ let _slashMatches = [];
 
 // --- Tool Activity State ---
 let _activeGroup = null;
+
+let markdownRendererConfigured = false;
+
+function ensureMarkdownRendererConfigured() {
+  if (markdownRendererConfigured || typeof marked === 'undefined' || typeof marked.setOptions !== 'function') {
+    return;
+  }
+  marked.setOptions({ gfm: true, breaks: true });
+  markdownRendererConfigured = true;
+}
 let _activeToolCards = {};
 let _activityThinking = null;
 
@@ -666,14 +676,116 @@ function renderMarkdown(text) {
     if (/^\s*<!doctype\s/i.test(text) || /^\s*<html[\s>]/i.test(text)) {
       return escapeHtml(text);
     }
+
+    ensureMarkdownRendererConfigured();
+
     let html = marked.parse(text);
     // Sanitize HTML output to prevent XSS from tool output or LLM responses.
     html = sanitizeRenderedHtml(html);
-    // Inject copy buttons into <pre> blocks
-    html = html.replace(/<pre>/g, '<pre class="code-block-wrapper"><button class="copy-btn" onclick="copyCodeBlock(this)">Copy</button>');
+    html = hardenRenderedHtml(html);
     return html;
   }
   return escapeHtml(text);
+}
+
+function languageFromClassName(className) {
+  if (!className) return '';
+  const m = className.match(/(?:^|\s)(?:language|lang)-([a-z0-9_+-]+)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+function enhanceCodeBlocks(el) {
+  el.querySelectorAll('pre').forEach((pre) => {
+    if (pre.dataset.enhanced === '1') return;
+
+    const code = pre.querySelector('code');
+    const language = code ? languageFromClassName(code.className) : '';
+
+    if (code && typeof hljs !== 'undefined') {
+      if (language && hljs.getLanguage(language)) {
+        hljs.highlightElement(code);
+      } else {
+        hljs.highlightElement(code);
+      }
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'code-block-header';
+
+    const langChip = document.createElement('span');
+    langChip.className = 'code-lang';
+    langChip.textContent = language || 'text';
+    header.appendChild(langChip);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-btn';
+    copyBtn.setAttribute('aria-label', 'Copy code block');
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = function() { copyCodeBlock(copyBtn); };
+    header.appendChild(copyBtn);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(pre);
+    pre.dataset.enhanced = '1';
+  });
+}
+
+function enhanceRenderedContent(el) {
+  if (!el) return;
+
+  // Render math formulas for research-style content.
+  if (typeof renderMathInElement === 'function') {
+    renderMathInElement(el, {
+      throwOnError: false,
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true },
+      ],
+      ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+      ignoredClasses: ['katex'],
+      strict: 'ignore',
+      trust: false,
+    });
+  }
+
+  enhanceCodeBlocks(el);
+}
+
+
+function hardenRenderedHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  // Remove dangerous URL schemes from link-like attributes.
+  template.content.querySelectorAll('[href], [src], [action]').forEach((node) => {
+    ['href', 'src', 'action'].forEach((attr) => {
+      if (!node.hasAttribute(attr)) return;
+      const value = (node.getAttribute(attr) || '').trim();
+      if (!value) return;
+      const normalized = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+      if (normalized.startsWith('javascript:') || normalized.startsWith('data:') || normalized.startsWith('vbscript:')) {
+        node.removeAttribute(attr);
+      }
+    });
+  });
+
+  // Prevent reverse tabnabbing for markdown links opening in a new tab.
+  template.content.querySelectorAll('a[target="_blank"]').forEach((anchor) => {
+    const existingRel = (anchor.getAttribute('rel') || '').split(/\s+/).filter(Boolean);
+    const rel = new Set(existingRel);
+    rel.add('noopener');
+    rel.add('noreferrer');
+    anchor.setAttribute('rel', Array.from(rel).join(' '));
+  });
+
+  return template.innerHTML;
 }
 
 // Strip dangerous HTML elements and attributes from rendered markdown.
@@ -699,13 +811,47 @@ function sanitizeRenderedHtml(html) {
 }
 
 function copyCodeBlock(btn) {
-  const pre = btn.parentElement;
+  const wrapper = btn.closest('.code-block-wrapper');
+  const pre = wrapper ? wrapper.querySelector('pre') : btn.closest('pre');
+  if (!pre) return;
   const code = pre.querySelector('code');
   const text = code ? code.textContent : pre.textContent;
-  navigator.clipboard.writeText(text).then(() => {
+
+  const handleCopySuccess = () => {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-  });
+  };
+
+  const handleCopyFailure = () => {
+    btn.textContent = 'Copy failed';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  };
+
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(text).then(handleCopySuccess).catch(handleCopyFailure);
+    return;
+  }
+
+  // Fallback for browsers/contexts without navigator.clipboard.
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  try {
+    if (document.execCommand('copy')) {
+      handleCopySuccess();
+    } else {
+      handleCopyFailure();
+    }
+  } catch (_) {
+    handleCopyFailure();
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }
 
 function addMessage(role, content) {
@@ -717,6 +863,7 @@ function addMessage(role, content) {
   } else {
     div.setAttribute('data-raw', content);
     div.innerHTML = renderMarkdown(content);
+    enhanceRenderedContent(div);
   }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
@@ -730,6 +877,7 @@ function appendToLastAssistant(chunk) {
     const raw = (last.getAttribute('data-raw') || '') + chunk;
     last.setAttribute('data-raw', raw);
     last.innerHTML = renderMarkdown(raw);
+    enhanceRenderedContent(last);
     container.scrollTop = container.scrollHeight;
   } else {
     addMessage('assistant', chunk);
@@ -1319,6 +1467,7 @@ function createMessageElement(role, content) {
   } else {
     div.setAttribute('data-raw', content);
     div.innerHTML = renderMarkdown(content);
+    enhanceRenderedContent(div);
   }
   return div;
 }
@@ -1773,6 +1922,7 @@ function readMemoryFile(path) {
     // Render markdown if it's a .md file
     if (path.endsWith('.md')) {
       viewer.innerHTML = '<div class="memory-rendered">' + renderMarkdown(data.content) + '</div>';
+      enhanceRenderedContent(viewer);
       viewer.classList.add('rendered');
     } else {
       viewer.textContent = data.content;
@@ -2940,6 +3090,7 @@ function renderJobOverview(container, job) {
     const descBody = document.createElement('div');
     descBody.className = 'job-description-body';
     descBody.innerHTML = renderMarkdown(job.description);
+    enhanceRenderedContent(descBody);
     descSection.appendChild(descBody);
     container.appendChild(descSection);
   }
