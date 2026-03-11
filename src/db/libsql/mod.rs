@@ -21,6 +21,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use libsql::{Connection, Database as LibSqlDatabase};
 use rust_decimal::Decimal;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::agent::routine::{
     NotifyConfig, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus, Trigger,
@@ -154,6 +155,22 @@ impl LibSqlBackend {
 
 // ==================== Helper functions ====================
 
+static LEGACY_NAIVE_TIMESTAMP_WARNED: AtomicBool = AtomicBool::new(false);
+
+fn warn_legacy_naive_timestamp_once(timestamp: &str) {
+    if !LEGACY_NAIVE_TIMESTAMP_WARNED.swap(true, Ordering::Relaxed) {
+        tracing::warn!(
+            timestamp = %timestamp,
+            "parsed legacy naive timestamp without timezone; assumed UTC for backward compatibility"
+        );
+    } else {
+        tracing::debug!(
+            timestamp = %timestamp,
+            "parsed legacy naive timestamp without timezone; assumed UTC"
+        );
+    }
+}
+
 /// Parse an ISO-8601 timestamp string from SQLite into DateTime<Utc>.
 ///
 /// Tries multiple formats in order:
@@ -169,18 +186,12 @@ pub(crate) fn parse_timestamp(s: &str) -> Result<DateTime<Utc>, String> {
     }
     // Naive with fractional seconds (legacy or SQLite datetime() output)
     if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
-        tracing::debug!(
-            timestamp = %s,
-            "parsed legacy naive timestamp without timezone; assumed UTC"
-        );
+        warn_legacy_naive_timestamp_once(s);
         return Ok(ndt.and_utc());
     }
     // Naive without fractional seconds (legacy format)
     if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-        tracing::debug!(
-            timestamp = %s,
-            "parsed legacy naive timestamp without timezone; assumed UTC"
-        );
+        warn_legacy_naive_timestamp_once(s);
         return Ok(ndt.and_utc());
     }
     Err(format!("unparseable timestamp: {:?}", s))
