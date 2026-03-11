@@ -1721,6 +1721,24 @@ impl Store {
         Ok(row.is_some())
     }
 
+    /// Delete a conversation and all related rows for a specific user.
+    ///
+    /// Returns `true` if a row was deleted, `false` if no matching conversation exists.
+    pub async fn delete_conversation(
+        &self,
+        conversation_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, DatabaseError> {
+        let conn = self.conn().await?;
+        let deleted = conn
+            .execute(
+                "DELETE FROM conversations WHERE id = $1 AND user_id = $2",
+                &[&conversation_id, &user_id],
+            )
+            .await?;
+        Ok(deleted > 0)
+    }
+
     /// Load messages for a conversation with cursor-based pagination.
     ///
     /// Returns `(messages_oldest_first, has_more)`.

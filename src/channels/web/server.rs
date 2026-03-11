@@ -222,6 +222,10 @@ pub async fn start_server(
         .route("/api/chat/history", get(chat_history_handler))
         .route("/api/chat/threads", get(chat_threads_handler))
         .route("/api/chat/thread/new", post(chat_new_thread_handler))
+        .route(
+            "/api/chat/thread/{id}",
+            axum::routing::delete(chat_delete_thread_handler),
+        )
         // Memory
         .route("/api/memory/tree", get(memory_tree_handler))
         .route("/api/memory/list", get(memory_list_handler))
@@ -1387,6 +1391,52 @@ async fn chat_threads_handler(
         threads,
         active_thread: sess.active_thread,
     }))
+}
+
+async fn chat_delete_thread_handler(
+    State(state): State<Arc<GatewayState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<DeleteThreadResponse>, (StatusCode, String)> {
+    let session_manager = state.session_manager.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Session manager not available".to_string(),
+    ))?;
+
+    // Never delete the pinned assistant thread.
+    if let Some(ref store) = state.store {
+        let assistant_id = store
+            .get_or_create_assistant_conversation(&state.user_id, "gateway")
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if id == assistant_id {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Assistant thread cannot be deleted".to_string(),
+            ));
+        }
+    }
+
+    let deleted = if let Some(ref store) = state.store {
+        store
+            .delete_conversation(id, &state.user_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    } else {
+        false
+    };
+
+    let session = session_manager.get_or_create_session(&state.user_id).await;
+    let mut sess = session.lock().await;
+    let removed_from_memory = sess.threads.remove(&id).is_some();
+    if sess.active_thread == Some(id) {
+        sess.active_thread = None;
+    }
+
+    if deleted || removed_from_memory {
+        Ok(Json(DeleteThreadResponse { deleted: true }))
+    } else {
+        Err((StatusCode::NOT_FOUND, "Thread not found".to_string()))
+    }
 }
 
 async fn chat_new_thread_handler(
