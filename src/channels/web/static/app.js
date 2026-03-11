@@ -261,6 +261,7 @@ function connectSSE() {
       finalizeActivityGroup();
       loadHistory();
     }
+    loadThreads();
     sseHasConnectedBefore = true;
   };
 
@@ -1620,6 +1621,13 @@ function loadThreads() {
         item.appendChild(dot);
       }
 
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'thread-delete-btn';
+      deleteBtn.title = 'Delete conversation';
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', (e) => deleteThread(thread.id, e));
+      item.appendChild(deleteBtn);
+
       item.addEventListener('click', () => switchThread(thread.id));
       list.appendChild(item);
     }
@@ -1673,6 +1681,34 @@ function switchThread(threadId) {
   oldestTimestamp = null;
   loadHistory();
   loadThreads();
+}
+
+function deleteThread(threadId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (!threadId) return;
+
+  const ok = window.confirm('Delete this conversation? This cannot be undone.');
+  if (!ok) return;
+
+  apiFetch('/api/chat/thread/' + encodeURIComponent(threadId), { method: 'DELETE' })
+    .then(() => {
+      unreadThreads.delete(threadId);
+      if (currentThreadId === threadId) {
+        currentThreadId = null;
+        document.getElementById('chat-messages').innerHTML = '';
+        if (assistantThreadId) {
+          switchToAssistant();
+          return;
+        }
+      }
+      loadThreads();
+    })
+    .catch((err) => {
+      showToast('Failed to delete thread: ' + err.message, 'error');
+    });
 }
 
 function createNewThread() {

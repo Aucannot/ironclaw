@@ -105,6 +105,10 @@ impl ConversationStore for PgBackend {
             .await
     }
 
+    async fn delete_conversation(&self, id: Uuid, user_id: &str) -> Result<bool, DatabaseError> {
+        self.store.delete_conversation(id, user_id).await
+    }
+
     async fn list_conversations_with_preview(
         &self,
         user_id: &str,

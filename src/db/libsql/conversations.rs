@@ -83,6 +83,18 @@ impl ConversationStore for LibSqlBackend {
         Ok(())
     }
 
+    async fn delete_conversation(&self, id: Uuid, user_id: &str) -> Result<bool, DatabaseError> {
+        let conn = self.connect().await?;
+        let deleted = conn
+            .execute(
+                "DELETE FROM conversations WHERE id = ?1 AND user_id = ?2",
+                params![id.to_string(), user_id],
+            )
+            .await
+            .map_err(|e| DatabaseError::Query(e.to_string()))?;
+        Ok(deleted > 0)
+    }
+
     async fn list_conversations_with_preview(
         &self,
         user_id: &str,
